@@ -1,0 +1,73 @@
+resources:
+- name: web1
+  type: vm-template.jinja
+  properties:
+    machineType: n1-standard-1
+    zone: asia-east1-a
+    network: web-net
+    subnetwork: newwebsubnet
+- name: panfw
+  type: pan-fw.jinja
+  properties:
+    machineType: n1-standard-4
+    zone: asia-east1-a
+    network: web-net
+    subnetwork: newwebsubnet    
+- name: mgmt-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.0.0/24
+- name: public-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.1.0/24
+- name: web-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.2.0/24
+- name: db-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.3.0/24
+- name: newdbsubnet
+  type: subnetwork-template.jinja
+  properties:
+    network: db-net
+    range: 192.168.3.0/24
+    region: asia-southeast1
+- name: newmgmtsubnet
+  type: subnetwork-template.jinja
+  properties:
+    network: db-net
+    range: 192.168.0.0/24
+    region: asia-southeast1    
+- name: newpublicsubnet
+  type: subnetwork-template.jinja
+  properties:
+    network: public-net
+    range: 192.168.1.0/24  
+    region: europe-west1
+- name: newwebsubnet
+  type: subnetwork-template.jinja
+  properties:
+    network: web-net
+    range: 192.168.2.0/24
+    region: asia-east1
+- name: web-net-firewall
+  type: firewall-template.jinja
+  properties:
+    network: web-net 
+- name: mgmt-net-firewall
+  type: firewall-template.jinja
+  properties:
+    network: mgmt-net 
+- name: public-net-firewall
+  type: firewall-template.jinja
+  properties:
+    network: public-net     
+    
+    
