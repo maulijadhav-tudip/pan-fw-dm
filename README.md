@@ -8,8 +8,8 @@ You can write flexible template, configuration files and use them to create depl
 
 * Make sure you are in template's root directory (i.e. pan-fw-dm).
 * Creating deployment <br/>
-  gcloud deployment-manager deployments create <name> --config resource-config.yaml
+  gcloud deployment-manager deployments create [deployment-name] --config resource-config.yaml
 * List deployments <br/>
   gcloud deployment-manager deployments list
 * Delete a deployment <br/>
-  gcloud deployment-manager deployments delete <name>
+  gcloud deployment-manager deployments delete [deployment-name]
