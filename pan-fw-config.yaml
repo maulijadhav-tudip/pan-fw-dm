@@ -1,0 +1,260 @@
+resources:
+- name: web1
+  type: compute.v1.instance
+  properties:
+    zone: asia-east1-a
+    machineType: https://www.googleapis.com/compute/v1/projects/gcp-test-drive-dev/zones/asia-east1-a/machineTypes/n1-standard-1
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-8
+    networkInterfaces:
+    - network: $(ref.web-net.selfLink)
+      subnetwork: $(ref.newwebsubnet.selfLink)
+      networkIP: 192.168.2.55
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          apt-get update
+          apt-get install iperf
+
+- name: db1
+  type: compute.v1.instance
+  properties:
+    zone: asia-southeast1-a
+    machineType: https://www.googleapis.com/compute/v1/projects/gcp-test-drive-dev/zones/asia-southeast1-a/machineTypes/n1-standard-1
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-8
+    networkInterfaces:
+    - network: $(ref.db-net.selfLink)
+      subnetwork: $(ref.newdbsubnet.selfLink)
+      networkIP: 192.168.3.55
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+    metadata:
+      items:
+      - key: startup-script
+        value: |
+          #!/bin/bash
+          sudo apt-get update
+          sudo apt-get -y install debconf-utils
+          echo \"mysql-server mysql-server/root_password password paloalto@123\" | sudo debconf-set-selections
+          echo \"mysql-server mysql-server/root_password_again password paloalto@123\" | sudo debconf-set-selections
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y mysql-server
+          mysql -uroot -ppaloalto@123 -e \"DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');\
+          mysql -uroot -ppaloalto@123 -e \"DELETE FROM mysql.user WHERE User='';\
+          mysql -uroot -ppaloalto@123 -e \"DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_localhost';\
+          mysql -uroot -ppaloalto@123 -e \"FLUSH PRIVILEGES;\"
+          sudo sed -i \"s/.*bind-address.*/bind-address = 0.0.0.0/\" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo systemctl restart mysql
+          mysql -uroot -ppaloalto@123 -e \"CREATE DATABASE Demo;\"
+          mysql -uroot -ppaloalto@123 -e \"CREATE USER 'demouser'@'%' IDENTIFIED BY 'paloalto@123';\
+          mysql -uroot -ppaloalto@123 -e \"GRANT ALL PRIVILEGES ON Demo.* TO 'demouser'@'%';\
+          mysql -uroot -ppaloalto@123 -e \"FLUSH PRIVILEGES;\
+
+- name: panfw
+  type: compute.v1.instance
+  properties:
+    zone: asia-east1-a
+    machineType: https://www.googleapis.com/compute/v1/projects/gcp-test-drive-dev/zones/asia-east1-a/machineTypes/n1-standard-4
+    disks:
+    - deviceName: boot
+      type: PERSISTENT
+      boot: true
+      autoDelete: true
+      initializeParams:
+        sourceImage: https://www.googleapis.com/compute/v1/projects/gcp-test-drive-dev/global/images/pan-os
+    networkInterfaces:
+    - network: $(ref.web-net.selfLink)
+      subnetwork: $(ref.newwebsubnet.selfLink)
+      accessConfigs:
+      - name: External NAT
+        type: ONE_TO_ONE_NAT
+
+- name: mgmt-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.0.0/24
+- name: public-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.1.0/24
+- name: web-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.2.0/24
+- name: db-net
+  type: compute.v1.network
+  properties:
+    autoCreateSubnetworks: false
+    ip: 192.168.3.0/24
+
+- name: newdbsubnet
+  type: compute.v1.subnetwork
+  properties:
+    ipCidrRange: 192.168.3.0/24
+    network: $(ref.db-net.selfLink)
+    region: asia-southeast1
+- name: newmgmtsubnet
+  type: compute.v1.subnetwork
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    ipCidrRange: 192.168.0.0/24
+    region: asia-southeast1
+- name: newpublicsubnet
+  type: compute.v1.subnetwork
+  properties:
+    network: $(ref.public-net.selfLink)
+    ipCidrRange: 192.168.1.0/24
+    region: europe-west1
+- name: newwebsubnet
+  type: compute.v1.subnetwork
+  properties:
+    network: $(ref.web-net.selfLink)
+    ipCidrRange: 192.168.2.0/24
+    region: asia-east1
+
+- name: web-net-firewall-allow-internal
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.web-net.selfLink)
+    sourceRanges: ["10.0.0.0/8"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["0-65535"]
+    - IPProtocol: UDP
+      ports: ["0-65535"]
+    - IPProtocol: ICMP
+- name: web-net-firewall-allow-ssh
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.web-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["22"]
+- name: web-net-firewall-allow-icmp
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.web-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: ICMP
+- name: web-net-firewall-allow-https
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.web-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["443"]
+- name: web-net-firewall-allow-http
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.web-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80"]
+- name: mgmt-net-firewall-allow-internal
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    sourceRanges: ["10.0.0.0/8"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["0-65535"]
+    - IPProtocol: UDP
+      ports: ["0-65535"]
+    - IPProtocol: ICMP
+- name: mgmt-net-firewall-allow-ssh
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["22"]
+- name: mgmt-net-firewall-allow-icmp
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: ICMP
+- name: mgmt-net-firewall-allow-https
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["443"]
+- name: mgmt-net-firewall-allow-http
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.mgmt-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80"]
+- name: public-net-firewall-allow-internal
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.public-net.selfLink)
+    sourceRanges: ["10.0.0.0/8"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["0-65535"]
+    - IPProtocol: UDP
+      ports: ["0-65535"]
+    - IPProtocol: ICMP
+- name: public-net-firewall-allow-ssh
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.public-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["22"]
+- name: public-net-firewall-allow-icmp
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.public-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: ICMP
+- name: public-net-firewall-allow-https
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.public-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["443"]
+- name: public-net-firewall-allow-http
+  type: compute.v1.firewall
+  properties:
+    network: $(ref.public-net.selfLink)
+    sourceRanges: ["0.0.0.0/0"]
+    allowed:
+    - IPProtocol: TCP
+      ports: ["80"]
+
